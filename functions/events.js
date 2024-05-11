@@ -266,11 +266,17 @@ const AddResults = {
       lazy: true,
       defaultValue: new attemptResult.AttemptResult(0, '333'),
     },
+    {
+      name: 'overwrite',
+      type: 'Boolean',
+      docs: 'Overwrite existing results (DO NOT USE IN PROD)',
+      defaultValue: false,
+    },
   ],
   outputType: 'String',
   usesContext: true,
   mutations: ['events'],
-  implementation: (ctx, round, persons, result) => {
+  implementation: (ctx, round, persons, result, overwrite) => {
     var rd = lib.getWcifRound(ctx.competition, round)
     var attempts = ((rd) => {
       switch (rd.format) {
@@ -286,7 +292,7 @@ const AddResults = {
           return 5
       }
     })(rd)
-    if (rd.results.length > 0) {
+    if (!overwrite && rd.results.length > 0) {
       return `There are already results for ${round.id()}, not adding fake results.`
     }
     rd.results = persons.map((person) => {
