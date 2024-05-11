@@ -28,6 +28,7 @@ const AssignStaff = {
     },
     {
       name: 'overwrite',
+      docs: 'If assignments exist, remove the existing assignments',
       type: 'Boolean',
       defaultValue: false,
     },
@@ -36,12 +37,18 @@ const AssignStaff = {
       type: 'Boolean',
       defaultValue: true,
     },
+    {
+      name: 'fill',
+      docs: 'If assignments exist, use the existing assignments and assign the missing jobs if any',
+      type: 'Boolean',
+      defaultValue: false,
+    },
   ],
   outputType: 'StaffAssignmentResult',
   usesContext: true,
   mutations: ['persons'],
-  implementation: (ctx, round, groupFilter, persons, jobs, scorers, overwrite, avoidConflicts) => {
-    return assign.Assign(ctx, round, groupFilter, persons, jobs, scorers, overwrite || ctx.dryrun, avoidConflicts)
+  implementation: (ctx, round, groupFilter, persons, jobs, scorers, overwrite, avoidConflicts, fill) => {
+    return assign.Assign(ctx, round, groupFilter, persons, jobs, scorers, overwrite, avoidConflicts, fill)
   }
 }
 
@@ -74,12 +81,18 @@ const AssignMisc = {
       type: 'Boolean',
       defaultValue: true,
     },
+    {
+      name: 'fill',
+      docs: 'If assignments exist, use the existing assignments and assign the missing jobs if any',
+      type: 'Boolean',
+      defaultValue: false,
+    },
   ],
   outputType: 'StaffAssignmentResult',
   usesContext: true,
   mutations: ['persons'],
-  implementation: (ctx, activityId, persons, jobs, scorers, overwrite, avoidConflicts) => {
-    return assign.AssignMisc(ctx, activityId, persons, jobs, scorers, overwrite || ctx.dryrun, avoidConflicts)
+  implementation: (ctx, activityId, persons, jobs, scorers, overwrite, avoidConflicts, fill) => {
+    return assign.AssignMisc(ctx, activityId, persons, jobs, scorers, overwrite || ctx.dryrun, avoidConflicts, fill)
   }
 }
 
