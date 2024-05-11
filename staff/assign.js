@@ -4,23 +4,23 @@ const extension = require('./../extension')
 const lib = require('./../lib')
 const driver = require('./../parser/driver')
 
-function AssignImpl(ctx, activities, persons, jobs, scorers, overwrite, name, avoidConflicts) {
+function AssignImpl(ctx, activities, persons, jobs, scorers, overwrite, name, avoidConflicts, fill) {
   var competition = ctx.competition
   var allGroups = lib.allGroups(competition)
   var groupIds = activities.map((group) => group.wcif.id)
 
+  const isLocalStaffAssignment = (a) =>
+    a.assignmentCode !== 'competitor' && groupIds.includes(a.activityId)
+
   // Check if there's anyone who already has a staff assignment.
-  var peopleAlreadyAssigned = competition.persons.filter((person) => {
-    return person.assignments.filter((assignment) => {
-      return assignment.assignmentCode !== 'competitor' && groupIds.includes(assignment.activityId)
-    }).length > 0
-  })
-  if (peopleAlreadyAssigned.length > 0) {
+  var peopleAlreadyAssigned = competition.persons
+    .filter((person) => person.assignments.filter(isLocalStaffAssignment).length > 0)
+
+  if (peopleAlreadyAssigned.length > 0 && !fill) {
     if (overwrite) {
       peopleAlreadyAssigned.forEach((person) => {
-        person.assignments = person.assignments.filter((assignment) => {
-          return assignment.assignmentCode === 'competitor' || !groupIds.includes(assignment.activityId)
-        })
+        person.assignments = person.assignments
+          .filter((assignment) => !isLocalStaffAssignment(assignment))
       })
     } else {
       return {
@@ -33,6 +33,13 @@ function AssignImpl(ctx, activities, persons, jobs, scorers, overwrite, name, av
       }
     }
   }
+
+  // Compute existing staff assignments for these activities, and enrich them
+  // with the person's data.
+  const existingStaffAssignments = competition.persons
+    .flatMap(p => p.assignments
+      .filter(isLocalStaffAssignment)
+      .map(a => ({ ...a, person: p })))
 
   var out = {
     round: name,
@@ -55,9 +62,51 @@ function AssignImpl(ctx, activities, persons, jobs, scorers, overwrite, name, av
   })
 
   activities.forEach((activity, idx) => {
+    const activityKey = activity.wcif.id
+    // Compute existing activities
+    assignmentsForActivity = existingStaffAssignments.filter(a => a.activityId === activity.wcif.id)
+    assignmentsForActivity.forEach(a => {
+      const jobKey = a.assignmentCode.replace('staff-', '') + (a.stationNumber ? `-${a.stationNumber}` : '')
+      if (!(jobKey in jobAssignments)) {
+        console.error('Unknown job key')
+        return
+      }
+      if (!(activityKey in jobAssignments[jobKey])) {
+        jobAssignments[jobKey][activityKey] = []
+      }
+      jobAssignments[jobKey][activityKey].push({
+        person: a.person
+      })
+    })
     var conflictingGroupIds = allGroups.filter((otherGroup) => {
       return activity.startTime < otherGroup.endTime && otherGroup.startTime < activity.endTime
     }).map((activity) => activity.wcif.id)
+    var model = {
+      optimize: 'score',
+      opType: 'max',
+      constraints: {},
+      variables: {},
+      ints: {},
+    }
+    let neededPeople = 0;
+    jobs.forEach((job) => {
+      if (job.assignStations) {
+        [...Array(job.count).keys()].forEach((num) => {
+          const jobNameWithStation = job.name + '-' + (num + 1)
+          if ((jobAssignments[jobNameWithStation][activityKey] || []).length < 1) {
+            neededPeople += 1;
+            model.constraints['job-' + job.name + '-' + (num + 1)] = {equal: 1}
+          }
+        })
+      } else {
+        const existingJobsLength = (jobAssignments[job.name][activityKey] || []).length
+        const missingJobs = job.count - existingJobsLength
+        if (missingJobs > 0) {
+          neededPeople += missingJobs
+          model.constraints['job-' + job.name] = {equal: missingJobs}
+        }
+      }
+    })
     var eligiblePeople = persons.filter((person) => {
       if (avoidConflicts &&
           !person.assignments.every((assignment) => !conflictingGroupIds.includes(assignment.activityId))) {
@@ -70,27 +119,10 @@ function AssignImpl(ctx, activities, persons, jobs, scorers, overwrite, name, av
       var unavailables = driver.parseNode(ext.staffUnavailable.implementation, ctx, true).value({}, ctx)
       return !unavailables.some((unavail) => unavail(activity))
     })
-    var neededPeople = jobs.map((job) => job.count).reduce((a, v) => a+v)
     if (eligiblePeople.length < neededPeople) {
       out.warnings.push('Not enough people for activity ' + activity.name() + ' (needed ' + neededPeople + ', got ' + eligiblePeople.length + ')')
       return
     }
-    var model = {
-      optimize: 'score',
-      opType: 'max',
-      constraints: {},
-      variables: {},
-      ints: {},
-    }
-    jobs.forEach((job) => {
-      if (job.assignStations) {
-        [...Array(job.count).keys()].forEach((num) => {
-          model.constraints['job-' + job.name + '-' + (num + 1)] = {equal: 1}
-        })
-      } else {
-        model.constraints['job-' + job.name] = {equal: job.count}
-      }
-    })
     eligiblePeople.forEach((person) => {
       model.constraints['person-' + person.wcaUserId] = {min: 0, max: 1}
       var personScore = 0
@@ -164,7 +196,6 @@ function AssignImpl(ctx, activities, persons, jobs, scorers, overwrite, name, av
           breakdown[scorer.constructor.name] = subscore
         })
         var jobKey = jobName + (stationNumber ? '-' + stationNumber : '')
-        var activityKey = activity.wcif.id
         if (!(activityKey in jobAssignments[jobKey])) {
           jobAssignments[jobKey][activityKey] = []
         }
@@ -183,21 +214,24 @@ function AssignImpl(ctx, activities, persons, jobs, scorers, overwrite, name, av
           assignmentCode: 'staff-' + jobName,
           stationNumber: stationNumber
         })
+        if (peopleAlreadyAssigned.length > 0 && fill) {
+          out.warnings.push(`New activity: ${person.name} (${person.wcaId}), ${activity.wcif.activityCode}, staff-${jobName} ${stationNumber ? stationNumber : ''}`)
+        }
       })
     })
   })
   return out
 }
 
-function Assign(ctx, round, groupFilter, persons, jobs, scorers, overwrite, avoidConflicts) {
+function Assign(ctx, round, groupFilter, persons, jobs, scorers, overwrite, avoidConflicts, fill) {
   var competition = ctx.competition
   var groups = lib.groupsForRoundCode(competition, round).filter((group) => {
     return groupFilter({Group: group})
   })
-  return AssignImpl(ctx, groups, persons, jobs, scorers, overwrite, round.toString(), avoidConflicts)
+  return AssignImpl(ctx, groups, persons, jobs, scorers, overwrite, round.toString(), avoidConflicts, fill)
 }
 
-function AssignMisc(ctx, activityId, persons, jobs, scorers, overwrite, avoidConflicts) {
+function AssignMisc(ctx, activityId, persons, jobs, scorers, overwrite, avoidConflicts, fill) {
   var activity = lib.miscActivityForId(ctx.competition, activityId)
   if (activity === null) {
     return {
@@ -209,7 +243,7 @@ function AssignMisc(ctx, activityId, persons, jobs, scorers, overwrite, avoidCon
       },
     }
   }
-  return AssignImpl(ctx, [activity], persons, jobs, scorers, overwrite, activity.name(), avoidConflicts)
+  return AssignImpl(ctx, [activity], persons, jobs, scorers, overwrite, activity.name(), avoidConflicts, fill)
 }
 
 function Job(name, count, assignStations, eligibility) {
