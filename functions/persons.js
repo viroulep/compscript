@@ -1,4 +1,5 @@
 const extension = require('./../extension')
+const lib = require('./../lib')
 
 const Name = {
   name: 'Name',
@@ -449,22 +450,38 @@ const ClearAssignments = {
       name: 'clearGroups',
       type: 'Boolean',
     },
+    {
+      name: 'groups',
+      type: 'Array<Group>',
+      defaultValue: [],
+      docs: 'Optionally restricts the groups for which to clear assignments.',
+    },
   ],
   mutations: ['persons'],
   outputType: 'String',
-  implementation: (persons, clearStaff, clearGroups) => {
+  usesContext: true,
+  implementation: (ctx, persons, clearStaff, clearGroups, groups) => {
+    let removed = 0
+    const groupIds = groups.map((group) => group.wcif.id)
     persons.forEach((person) => {
       person.assignments = person.assignments.filter((assignment) => {
+        // If we filter for groups, and this assignment is not relevant to them,
+        // just keep it straight away.
+        if (groupIds.length !== 0 && !groupIds.includes(assignment.activityId)) {
+          return true
+        }
         if (clearGroups && assignment.assignmentCode === 'competitor') {
+          removed += 1
           return false
         }
         if (clearStaff && assignment.assignmentCode.startsWith('staff-')) {
+          removed += 1
           return false
         }
         return true
       })
     })
-    return 'ok'
+    return `ok, removed ${removed} assignments`
   }
 }
 
