@@ -11,7 +11,7 @@ function Assign(competition, round, assignmentSets, scorers, stationRules, attem
   var activityIds = groups.map((group) => group.wcif.id)
 
   if (competition.persons.map((person) => person.assignments).flat()
-          .some((assignment) => activityIds.includes(assignment.activityId))) {
+          .some((assignment) => assignment.assignmentCode === 'competitor' && activityIds.includes(assignment.activityId))) {
     if (!override) {
       return {
         round: round,
@@ -107,8 +107,12 @@ function Assign(competition, round, assignmentSets, scorers, stationRules, attem
       // Don't assign any more to groups with enough people pre-assigned.
       var groupsToUse = eligibleGroups.filter((group) => currentByGroup[group.wcif.id].length + preAssignedByGroup[group.wcif.id] <= groupSizeLimit)
       // but if that filters out all groups, it means the math is wrong and we need to allow more space.
-      if (groupsToUse.length === 0) {
+      // If faced with an unfeasible solution, also try to increase the groups
+      // available (eg: to have slightly unbalanced groups).
+      if (groupsToUse.length === 0 ||
+          (potentialInfinite && groupsToUse.length !== eligibleGroups.length)) {
         groupSizeLimit++
+        previousLength = -1
         continue
       }
       // Remove anyone from the queue who's pre-assigned to a full group.
