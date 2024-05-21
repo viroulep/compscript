@@ -70,6 +70,30 @@ function endTime(group, competition) {
   return DateTime.fromISO(group.wcif.endTime).setZone(competition.schedule.venues[0].timezone)
 }
 
+function clearGroupsAssignments(persons, clearStaff, clearGroups, groups) {
+  let removed = 0
+  const groupIds = groups.map((group) => group.wcif.id)
+  persons.forEach((person) => {
+    person.assignments = person.assignments.filter((assignment) => {
+      // If we filter for groups, and this assignment is not relevant to them,
+      // just keep it straight away.
+      if (groupIds.length !== 0 && !groupIds.includes(assignment.activityId)) {
+        return true
+      }
+      if (clearGroups && assignment.assignmentCode === 'competitor') {
+        removed += 1
+        return false
+      }
+      if (clearStaff && assignment.assignmentCode.startsWith('staff-')) {
+        removed += 1
+        return false
+      }
+      return true
+    })
+  })
+  return removed;
+}
+
 module.exports = {
   getWcifEvent: getWcifEvent,
   getWcifRound: getWcifRound,
@@ -81,4 +105,5 @@ module.exports = {
   startTime: startTime,
   endTime: endTime,
   miscActivityForId: miscActivityForId,
+  clearGroupsAssignments: clearGroupsAssignments,
 }
