@@ -472,28 +472,8 @@ const ClearAssignments = {
   ],
   mutations: ['persons'],
   outputType: 'String',
-  usesContext: true,
-  implementation: (ctx, persons, clearStaff, clearGroups, groups) => {
-    let removed = 0
-    const groupIds = groups.map((group) => group.wcif.id)
-    persons.forEach((person) => {
-      person.assignments = person.assignments.filter((assignment) => {
-        // If we filter for groups, and this assignment is not relevant to them,
-        // just keep it straight away.
-        if (groupIds.length !== 0 && !groupIds.includes(assignment.activityId)) {
-          return true
-        }
-        if (clearGroups && assignment.assignmentCode === 'competitor') {
-          removed += 1
-          return false
-        }
-        if (clearStaff && assignment.assignmentCode.startsWith('staff-')) {
-          removed += 1
-          return false
-        }
-        return true
-      })
-    })
+  implementation: (persons, clearStaff, clearGroups, groups) => {
+    const removed = lib.clearGroupsAssignments(persons, clearStaff, clearGroups, groups)
     return `ok, removed ${removed} assignments`
   }
 }

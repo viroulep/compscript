@@ -477,6 +477,41 @@ const GroupForActivityId = {
   implementation: (ctx, id) => lib.groupForActivityId(ctx.competition, id),
 }
 
+const RemoveGroupsForRound = {
+  name: 'RemoveGroupsForRound',
+  docs: 'Remove groups for the round and clear all their assignments',
+  args: [
+    {
+      name: 'round',
+      type: 'Round',
+      docs: 'The round for which to remove the groups.',
+    }
+  ],
+  outputType: 'String',
+  usesContext: true,
+  mutations: ['schedule'],
+  implementation: (ctx, round) => {
+    const groups = lib.groupsForRoundCode(ctx.competition, round)
+    if (groups.length === 0) {
+      return 'No groups to remove.'
+    }
+    const removed = lib.clearGroupsAssignments(ctx.competition.persons, true, true, groups)
+
+    let groupsRemoved = 0
+    ctx.competition.schedule.venues.forEach((venue) => {
+      venue.rooms.forEach((room) => {
+        room.activities.forEach((activity) => {
+          if (activity.activityCode === round.id()) {
+            groupsRemoved += activity.childActivities.length;
+            activity.childActivities = []
+          }
+        })
+      })
+    })
+    return `Remove ${removed} assignments and ${groupsRemoved} groups.`
+  },
+}
+
 const CreateGroups = function(activityCodeType) {
   return {
     name: 'CreateGroups',
@@ -691,6 +726,7 @@ module.exports = {
               GroupNumber, Stage, AssignedGroup, AssignedGroups,
               GroupName, StartTime, EndTime, Date,
               RoundStartTime, RoundEndTime,
+              RemoveGroupsForRound,
               AssignmentAtTime, Code, Group, GroupForActivityId, Round, Event, Groups,
               CreateGroups('Round'), CreateGroups('Attempt'), ManuallyAssign,
               CheckForMissingGroups],
