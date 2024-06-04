@@ -214,6 +214,9 @@ function AssignImpl(ctx, activities, persons, jobs, scorers, overwrite, name, av
           assignmentCode: 'staff-' + jobName,
           stationNumber: stationNumber
         })
+        if (peopleAlreadyAssigned.length > 0 && fill) {
+          out.warnings.push(`New activity: ${person.name} (${person.wcaId}), ${activity.wcif.activityCode}, staff-${jobName} ${stationNumber ? stationNumber : ''}`)
+        }
       })
     })
   })
