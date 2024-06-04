@@ -50,6 +50,15 @@ function allGroups(competition) {
     }).flat()
 }
 
+function allActivities(competition) {
+  return competition.schedule.venues.map((venue) => venue.rooms).flat()
+    .map((room) => {
+      return room.activities
+               .map((activity) => [activity, ...activity.childActivities]).flat()
+               .map((activity) => new groupLib.Group(activity, room, competition))
+    }).flat()
+}
+
 function groupForActivityId(competition, activityId) {
   var matching = allGroups(competition).filter((group) => group.wcif.id == activityId)
   if (matching.length) {
@@ -99,6 +108,7 @@ module.exports = {
   getWcifRound: getWcifRound,
   personalBest: personalBest,
   allGroups: allGroups,
+  allActivities: allActivities,
   allActivitiesForRoundId: allActivitiesForRoundId,
   groupForActivityId: groupForActivityId,
   groupsForRoundCode: groupsForRoundCode,
