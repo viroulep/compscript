@@ -50,7 +50,7 @@ function Assign(competition, round, assignmentSets, scorers, stationRules, attem
   groups.forEach((group) => {
     assignmentsByGroup[group.wcif.id] = []
     conflictingActivitiesByGroup[group.wcif.id] = []
-    lib.allGroups(competition).forEach((otherGroup) => {
+    lib.allActivities(competition).forEach((otherGroup) => {
       if (group.startTime < otherGroup.endTime && otherGroup.startTime < group.endTime) {
         conflictingActivitiesByGroup[group.wcif.id].push(otherGroup.wcif.id)
       }

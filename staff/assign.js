@@ -6,7 +6,7 @@ const driver = require('./../parser/driver')
 
 function AssignImpl(ctx, activities, persons, jobs, scorers, overwrite, name, avoidConflicts, fill) {
   var competition = ctx.competition
-  var allGroups = lib.allGroups(competition)
+  var allGroups = lib.allActivities(competition)
   var groupIds = activities.map((group) => group.wcif.id)
 
   const isLocalStaffAssignment = (a) =>
