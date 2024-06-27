@@ -1,5 +1,6 @@
 const assign = require('./../staff/assign')
 const scorers = require('./../staff/scorers')
+const lib = require('./../lib')
 const extension = require('./../extension')
 
 const AssignStaff = {
@@ -49,6 +50,38 @@ const AssignStaff = {
   mutations: ['persons'],
   implementation: (ctx, round, groupFilter, persons, jobs, scorers, overwrite, avoidConflicts, fill) => {
     return assign.Assign(ctx, round, groupFilter, persons, jobs, scorers, overwrite, avoidConflicts, fill)
+  }
+}
+
+const ClearMisc = {
+  name: 'ClearMisc',
+  args: [
+    {
+      name: 'activityId',
+      type: 'Number',
+    },
+  ],
+  outputType: 'String',
+  usesContext: true,
+  mutations: ['persons'],
+  implementation: (ctx, activityId) => {
+    const matchingActivity =
+      lib.allActivities(ctx.competition).filter(a => a.wcif.id === activityId)
+    if (matchingActivity.length !== 1) {
+      return `Could not find activity ${activityId}`
+    }
+    const matchesActivity = a => a.activityId === activityId
+    let removed = 0
+    ctx.competition.persons.forEach(p => {
+      p.assignments = p.assignments.filter(a => {
+        if (a.activityId === activityId) {
+          removed += 1
+          return false
+        }
+        return true
+      })
+    })
+    return `Removed ${removed} assignments`
   }
 }
 
@@ -404,7 +437,7 @@ const NumJobs = {
 }
 
 module.exports = {
-  functions: [AssignStaff, AssignMisc, Job,
+  functions: [AssignStaff, AssignMisc, ClearMisc, Job,
               JobCountScorer, PreferenceScorer,
               SameJobScorer, ConsecutiveJobScorer, MismatchedStationScorer,
               ScrambleSpeedScorer, GroupScorer, FollowingGroupScorer,
